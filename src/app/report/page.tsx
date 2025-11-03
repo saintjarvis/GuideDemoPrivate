@@ -104,7 +104,7 @@ const Input = ({ value, onChange, placeholder, className = "", disabled = false 
 const TYPES = ["Payment Discrepancy","Contract Violation","Billing Error","Data Quality"] as const;
 const STATUSES = ["New","In Review","Approved for Update","Complete"] as const;
 
-function makeId(i:number){ return `CASE-${1000+i}`; }
+function makeId(i:number){ return `DOC-${1000+i}`; }
 function makePerson(i:number){ return `${Math.floor(1e9 + (i*7919)%9_000_000_000)}`; }
 function makeDate(y:number,m:number,d:number){ return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
 
@@ -133,7 +133,7 @@ function buildExtraRows(){
 
 const BASE_ROWS: ExceptionRow[] = [
   {
-    caseFile: "CASE-1000",
+    caseFile: "DOC-1000",
     personId: "ACC-123456",
     exceptionType: "Payment Discrepancy",
     exceptionsCount: 4,
@@ -145,7 +145,7 @@ const BASE_ROWS: ExceptionRow[] = [
     details: "Payment flags identified across invoices and billing records; requires initial triage.",
   },
   {
-    caseFile: "CASE-1001",
+    caseFile: "DOC-1001",
     personId: "ACC-234567",
     exceptionType: "Payment Discrepancy",
     exceptionsCount: 4,
@@ -157,7 +157,7 @@ const BASE_ROWS: ExceptionRow[] = [
     details: "Finance review in progress; awaiting confirmation from contract documentation.",
   },
   {
-    caseFile: "CASE-1002",
+    caseFile: "DOC-1002",
     personId: "ACC-345678",
     exceptionType: "Contract Violation",
     exceptionsCount: 1,
@@ -169,7 +169,7 @@ const BASE_ROWS: ExceptionRow[] = [
     details: "Contract breach verified; update to account status approved.",
   },
   {
-    caseFile: "CASE-1003",
+    caseFile: "DOC-1003",
     personId: "ACC-456789",
     exceptionType: "Billing Error",
     exceptionsCount: 2,

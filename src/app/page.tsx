@@ -251,7 +251,7 @@ export default function GuideFindDashboard(){
                 setRunning(false);
 
                 const cases: DocResult[]=Array.from({length:CASES}).map((_,i)=>{
-                    const id=`CASE-${1000+i}`;
+                    const id=`DOC-${1000+i}`;
                     const matches: Record<string, boolean>={};
                     activeLabels.forEach(lbl=>matches[lbl]=seededFlag(lbl,i));
                     const positives=activeLabels.filter(l=>matches[l]);
