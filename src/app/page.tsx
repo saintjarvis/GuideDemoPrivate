@@ -3,12 +3,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 /**
- * GUIDE | FIND Control Dashboard — BEACON Oklahoma (Slim Build)
+ * BEACON | FIND Control Dashboard — Enterprise Edition
  * v1.1.0 (Dark mode)
  *
  * Notes:
- * - Added dark mode with a header toggle (persists in localStorage, respects system default).
- * - Kept: source explorer, linked/manual attributes, results matrix + expand, CSV export,
+ * - Private sector demo with billing, invoices, contracts, service records
+ * - Source explorer, linked/manual attributes, results matrix + expand, CSV export,
  *   Exception Summary new-tab export wiring.
  */
 
@@ -19,13 +19,13 @@ interface QueryItem {
     selected: boolean;
 }
 
-interface CaseHeader {
-    name: string;
-    dob: string;
-    caseNumber: string;
-    county: string;
-    caregiver: string;
-    openedDate: string;
+interface DocHeader {
+    vendor: string;
+    accountNumber: string;
+    amount: string;
+    status: string;
+    date: string;
+    location: string;
 }
 
 interface EvidenceLine {
@@ -34,9 +34,10 @@ interface EvidenceLine {
     sentence: string;
 }
 
-interface CaseResult {
+interface DocResult {
     id: string;
-    header: CaseHeader;
+    docName: string;
+    header: DocHeader;
     matches: Record<string, boolean>;
     evidence: EvidenceLine[];
     narrativeText: string;
@@ -45,7 +46,7 @@ interface CaseResult {
 interface Results {
     count: number;
     attributes: string[];
-    cases: CaseResult[];
+    documents: DocResult[];
     sources: string[];
     locations: string[];
 }
@@ -106,68 +107,73 @@ const ProgressBar = ({ value = 0 }: { value?: number }) => (
 
 /********************* DEMO HELPERS *********************/
 const ATTRIBUTES_BASE = [
-    "Substance Use","Domestic Violence","Prior Removal","Mental Health","Criminal History","Parental Capacity","Neglect","Trauma Indicators","Protective Factors"
+    "Payment Terms","Renewal Date","SLA Compliance","Dispute Flag","Overdue Amount",
+    "Service Level","Contract Value","Termination Clause","Billing Cycle","Usage Overage"
 ];
-const FIRST_NAMES = ["Aiden","Olivia","Noah","Emma","Liam","Ava","Mason","Sophia","Elijah","Isabella"];
-const LAST_NAMES  = ["Johnson","Williams","Brown","Jones","Garcia","Miller","Davis","Martinez","Wilson","Anderson"];
-const COUNTIES    = ["Oklahoma","Tulsa","Cleveland","Canadian","Comanche","Rogers","Pottawatomie","Payne","Muskogee","Wagoner"];
-const CAREGIVER   = ["Mother","Father","Grandmother","Grandfather","Aunt","Uncle","Guardian"];
+
+const VENDORS = ["Acme Supplies","Northwind Traders","Wayne Enterprises","Globex Corp","Stark Industries","Umbrella Corp","Initech","Cyberdyne Systems","Massive Dynamic","Soylent Corp"];
+const LOCATIONS = ["Atlanta, GA","Jackson, MS","Nashville, TN","Oklahoma City, OK","Memphis, TN","Birmingham, AL","Little Rock, AR","Louisville, KY"];
+const STATUSES = ["Paid","Pending","Overdue","Disputed","In Review","Approved","Rejected"];
+
 function seededRand(seed: number){ let x = Math.imul(1779033703 ^ seed, 3432918353); return function(){ x = Math.imul(x ^ (x >>> 13), 461845907); x = (x ^ (x >>> 16)) >>> 0; return x / 2**32; }; }
-function makeHeader(index: number, id: string): CaseHeader{
+
+function makeHeader(index: number, id: string): DocHeader{
     const r = seededRand(index + 1);
-    const name = FIRST_NAMES[Math.floor(r()*FIRST_NAMES.length)] + " " + LAST_NAMES[Math.floor(r()*LAST_NAMES.length)];
-    const y = 2008+Math.floor(r()*10), m=1+Math.floor(r()*12), d=1+Math.floor(r()*28);
-    const dob=`${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-    const county=COUNTIES[Math.floor(r()*COUNTIES.length)];
-    const cg=CAREGIVER[Math.floor(r()*CAREGIVER.length)];
-    const oy=2024+Math.floor(r()*2), om=1+Math.floor(r()*12), od=1+Math.floor(r()*28);
-    const openedDate=`${oy}-${String(om).padStart(2,"0")}-${String(od).padStart(2,"0")}`;
-    return { name, dob, caseNumber:id, county, caregiver:cg, openedDate };
+    const vendor = VENDORS[Math.floor(r()*VENDORS.length)];
+    const accountNumber = `ACC-${100000 + Math.floor(r()*899999)}`;
+    const amount = `$${(Math.floor(r()*50000) + 100).toLocaleString()}.${Math.floor(r()*100).toString().padStart(2,"0")}`;
+    const status = STATUSES[Math.floor(r()*STATUSES.length)];
+    const location = LOCATIONS[Math.floor(r()*LOCATIONS.length)];
+    const y = 2024+Math.floor(r()*2), m=1+Math.floor(r()*12), d=1+Math.floor(r()*28);
+    const date=`${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    return { vendor, accountNumber, amount, status, date, location };
 }
+
 const EVIDENCE_TEMPLATES: Record<string, string> = {
-    "Substance Use":"Caregiver admitted to recent {term} use; paraphernalia observed.",
-    "Domestic Violence":"Child described an incident of {term} last night.",
-    "Mental Health":"Caregiver reports ongoing {term} affecting parenting.",
-    "Criminal History":"Record indicates prior {term} within 24 months.",
-    "Parental Capacity":"Assessment notes limited {term}.",
-    "Neglect":"Home conditions indicate {term}.",
-    "Trauma Indicators":"Child displays {term} in interview.",
-    "Protective Factors":"Presence of {term} noted.",
-    "Hearing Date":"Court set {term} for review.",
-    "Attorney":"{term} listed as counsel.",
-    "Judge":"Assigned to {term}.",
-    "Case Number":"Filed under {term}."
+    "Payment Terms":"Invoice specifies {term} payment terms with net 30 days.",
+    "Renewal Date":"Contract renewal scheduled for {term}.",
+    "SLA Compliance":"Service level agreement shows {term} compliance rate.",
+    "Dispute Flag":"Account marked with {term} dispute status.",
+    "Overdue Amount":"Outstanding balance of {term} past due date.",
+    "Service Level":"Agreement tier classified as {term}.",
+    "Contract Value":"Total contract value estimated at {term}.",
+    "Termination Clause":"Document includes {term} termination provision.",
+    "Billing Cycle":"Billing processed on {term} cycle.",
+    "Usage Overage":"Service usage exceeded baseline by {term}.",
 };
+
 const TERM_EXAMPLES: Record<string, string> = {
-    "Substance Use":"methamphetamine",
-    "Domestic Violence":"intimate partner violence",
-    "Mental Health":"depression/anxiety",
-    "Criminal History":"misdemeanor possession",
-    "Parental Capacity":"protective capacity",
-    "Neglect":"environmental neglect",
-    "Trauma Indicators":"hypervigilance",
-    "Protective Factors":"natural supports",
-    "Hearing Date":"2025-11-14",
-    "Attorney":"Jane Q. Lawyer",
-    "Judge":"Hon. R. Carter",
-    "Case Number":"CJ-2025-1034"
+    "Payment Terms":"net 30",
+    "Renewal Date":"2026-03-15",
+    "SLA Compliance":"98.5%",
+    "Dispute Flag":"active",
+    "Overdue Amount":"$2,340.00",
+    "Service Level":"Gold",
+    "Contract Value":"$125,000",
+    "Termination Clause":"30-day notice",
+    "Billing Cycle":"monthly",
+    "Usage Overage":"15%",
 };
+
 const buildEvidenceLine = (label: string): EvidenceLine => {
-    const t=EVIDENCE_TEMPLATES[label]||"Narrative references {term} under {label}.";
+    const t=EVIDENCE_TEMPLATES[label]||"Document references {term} under {label}.";
     const term=TERM_EXAMPLES[label]||label.toLowerCase();
     return { label, term, sentence: t.replace("{term}",term).replace("{label}",label) };
 };
 
-/********************* DATA: SOURCE TREE (TRIMMED) *********************/
+/********************* DATA: SOURCE TREE *********************/
 const SOURCE_TREE = [
-    { key:"intake" as const, label:"Intake Notes", count:1000, children:[{label:"2025 / Q1",count:240},{label:"2024 / Q4",count:265},{label:"Flagged (drug-endangered)",count:41}]},
-    { key:"case" as const,   label:"Case Notes",   count:500,  children:[{label:"Open Cases",count:180},{label:"Closed Cases",count:320}]},
-    { key:"court" as const,  label:"Court Documents",count:160, children:[{label:"Hearings",count:90},{label:"Orders",count:45},{label:"Petitions",count:25}]},
+    { key:"invoices" as const, label:"Invoices", count:1250, children:[{label:"2025",count:640},{label:"2024",count:610}]},
+    { key:"contracts" as const, label:"Contracts", count:410, children:[{label:"Active",count:280},{label:"Expired",count:130}]},
+    { key:"billing" as const, label:"Billing", count:980, children:[{label:"Current Cycle",count:520},{label:"Past Due",count:120},{label:"Disputed",count:40}]},
+    { key:"service" as const, label:"Service Records", count:730, children:[{label:"Install",count:210},{label:"Repair",count:360},{label:"Maintenance",count:160}]},
 ];
+
 const SOURCE_ATTRIBUTE_PRESETS: Record<string, string[]> = {
-    intake:[...ATTRIBUTES_BASE, "Reporter Type"],
-    case:["Substance Abuse","Depression","Sexual Promiscuity","Violent","Runs Away","Steals","Harms Animals"],
-    court:["Hearing Date","Attorney","Judge","Case Number","Order Type","Outcome","Next Hearing","Guardian ad Litem","District Attorney"],
+    invoices:["Vendor/Customer","PO Reference","Amount","Payment Status","Invoice Date"],
+    contracts:["Parties","Renewal Date","Termination Clause","SLA Reference","Jurisdiction"],
+    billing:["Account #","Cycle","Usage","Amount Due","Dispute Flag"],
+    service:["Request ID","Technician","Type","SLA Compliance","Rating"],
 };
 
 // High-level repository locations (for selection in UI)
@@ -175,15 +181,16 @@ const LOCATION_CHOICES = [
     "SharePoint",
     "MS Teams",
     "OneDrive",
-    "CCWIS",
-    "Case Management System",
+    "CRM",
+    "Billing & Charging System",
+    "Operations Support System (OSS)"
 ];
 
 /********************* COMPONENT ************************/
 export default function GuideFindDashboard(){
     const [progress,setProgress]=useState(0); const [running,setRunning]=useState(false); const [docTarget,setDocTarget]=useState(1000);
-    const [openNodes,setOpenNodes]=useState({intake:true,case:true,court:true});
-    const [sourceSelected,setSourceSelected]=useState({intake:true,case:true,court:true});
+    const [openNodes,setOpenNodes]=useState({invoices:true,contracts:true,billing:true,service:true});
+    const [sourceSelected,setSourceSelected]=useState({invoices:true,contracts:true,billing:true,service:true});
     // Locations selection state
     const [locations,setLocations]=useState<Record<string, boolean>>(()=>{
         const init: Record<string, boolean> = {};
@@ -243,7 +250,7 @@ export default function GuideFindDashboard(){
                 setProgress(value);
                 setRunning(false);
 
-                const cases: CaseResult[]=Array.from({length:CASES}).map((_,i)=>{
+                const cases: DocResult[]=Array.from({length:CASES}).map((_,i)=>{
                     const id=`CASE-${1000+i}`;
                     const matches: Record<string, boolean>={};
                     activeLabels.forEach(lbl=>matches[lbl]=seededFlag(lbl,i));
@@ -251,16 +258,16 @@ export default function GuideFindDashboard(){
                     const evidence=positives.map(buildEvidenceLine);
                     const header=makeHeader(i,id);
                     const narrativeText=[
-                        `On ${header.openedDate}, a ${header.caregiver.toLowerCase()} in ${header.county} County met with the worker regarding ${header.name} (DOB ${header.dob}).`,
-                        "The worker conducted a home visit, interviewed involved parties, and reviewed collateral sources.",
-                        evidence.length?evidence.map(e=>e.sentence).join(" "):"No specific safety indicators were identified in the documentation reviewed.",
-                        "A safety plan discussion occurred and follow-up tasks were recorded."
+                        `Transaction processed on ${header.date} for ${header.vendor} (Account ${header.accountNumber}) in ${header.location}.`,
+                        `Amount: ${header.amount}, Status: ${header.status}.`,
+                        evidence.length?evidence.map(e=>e.sentence).join(" "):"No specific attributes were identified in the documentation reviewed.",
+                        "Additional details available in source documentation."
                     ].join(" ");
-                    return {id,header,matches,evidence,narrativeText};
+                    return {id,docName:`${header.vendor}-${header.accountNumber}`,header,matches,evidence,narrativeText};
                 });
                 const sources=Object.entries(sourceSelected).filter(([,v])=>v).map(([k])=>k);
                 const selectedLocations = Object.entries(locations).filter(([,v])=>v).map(([k])=>k);
-                setResults({count:docTarget,attributes:activeLabels,cases,sources, locations: selectedLocations});
+                setResults({count:docTarget,attributes:activeLabels,documents:cases,sources, locations: selectedLocations});
                 return;
             }
             setProgress(value);
@@ -270,11 +277,11 @@ export default function GuideFindDashboard(){
     // CSV helpers
     const buildExceptionSummaryRows=(result: Results | null)=>{
         if(!result) return [];
-        return (result.cases||[]).map(c=>{
+        return (result.documents||[]).map(c=>{
             const positives=(result.attributes||[]).filter(a=>c.matches[a]);
             if(positives.length===0) return null;
             const evidence=(c.evidence||[]).map(e=>e.sentence).join(" ");
-            return {case_id:c.id,name:c.header?.name||"",dob:c.header?.dob||"",county:c.header?.county||"",caregiver:c.header?.caregiver||"",opened:c.header?.openedDate||"",positive_attributes:positives.join("; "),evidence};
+            return {case_id:c.id,name:c.header?.vendor||"",dob:c.header?.date||"",county:c.header?.location||"",caregiver:c.header?.status||"",opened:c.header?.date||"",positive_attributes:positives.join("; "),evidence};
         }).filter(Boolean);
     };
     const toCSV=(rows: Record<string, string>[])=>{
@@ -318,7 +325,7 @@ export default function GuideFindDashboard(){
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Sources */}
                 <Card>
-                    <CardHeader><CardTitle>Target Locations to Scan</CardTitle></CardHeader>
+                    <CardHeader><CardTitle>Source Repositories</CardTitle></CardHeader>
                     <CardContent className="space-y-3">
                         {/* Repository Locations */}
                         <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-3">
@@ -339,10 +346,10 @@ export default function GuideFindDashboard(){
                             </div>
                         </div>
                         <div className="flex items-center justify-between">
-                            <div className="text-sm text-gray-600 dark:text-gray-300">Targets to Find and Classify</div>
+                            <div className="text-sm text-gray-600 dark:text-gray-300">Choose repositories to include</div>
                             <div className="flex gap-2">
-                                <Button onClick={()=>{const all: Record<string, boolean>={}; SOURCE_TREE.forEach(n=>all[n.key]=true); setSourceSelected(all as {intake: boolean, case: boolean, court: boolean});}}>Select All</Button>
-                                <Button onClick={()=>{const none: Record<string, boolean>={}; SOURCE_TREE.forEach(n=>none[n.key]=false); setSourceSelected(none as {intake: boolean, case: boolean, court: boolean});}}>Clear All</Button>
+                                <Button onClick={()=>{const all: Record<string, boolean>={}; SOURCE_TREE.forEach(n=>all[n.key]=true); setSourceSelected(all as {invoices: boolean, contracts: boolean, billing: boolean, service: boolean});}}>Select All</Button>
+                                <Button onClick={()=>{const none: Record<string, boolean>={}; SOURCE_TREE.forEach(n=>none[n.key]=false); setSourceSelected(none as {invoices: boolean, contracts: boolean, billing: boolean, service: boolean});}}>Clear All</Button>
                             </div>
                         </div>
                         <div className="rounded-xl border border-gray-200 dark:border-gray-800">
@@ -384,17 +391,17 @@ export default function GuideFindDashboard(){
                                 </div>
 
                                 {/* Case Owner */}
-                                <div>
-                                    <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Case Owner</div>
-                                    <input type="text" value={filterCaseOwner} onChange={(e)=>setFilterCaseOwner(e.target.value)} className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-1.5 text-sm" placeholder="Enter case owner name" />
-                                </div>
+                                {/*<div>*/}
+                                {/*    <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Case Owner</div>*/}
+                                {/*    <input type="text" value={filterCaseOwner} onChange={(e)=>setFilterCaseOwner(e.target.value)} className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-1.5 text-sm" placeholder="Enter case owner name" />*/}
+                                {/*</div>*/}
 
-                                {/* Location/Region */}
+                                {/* Location */}
                                 <div>
                                     <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Location/Region</div>
                                     <select value={filterRegion} onChange={(e)=>setFilterRegion(e.target.value)} className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-1.5 text-sm">
                                         <option value="">All Regions</option>
-                                        {COUNTIES.map(county=>(<option key={county} value={county}>{county}</option>))}
+                                        {LOCATION_CHOICES.map(county=>(<option key={county} value={county}>{county}</option>))}
                                     </select>
                                 </div>
 
@@ -471,10 +478,10 @@ export default function GuideFindDashboard(){
             {/* Results */}
             {results && (
                 <Card className="mt-8">
-                    <CardHeader><CardTitle>Results — Case Files × Attributes</CardTitle></CardHeader>
+                    <CardHeader><CardTitle>Results — Documents × Attributes</CardTitle></CardHeader>
                     <CardContent>
                         <div className="text-sm text-gray-600 dark:text-gray-300 mb-3 flex flex-wrap items-center gap-2">
-                            <span>Searched <span className="font-semibold">{results.count.toLocaleString()}</span> docs; showing <span className="font-semibold">{results.cases.length}</span> files × <span className="font-semibold">{results.attributes.length}</span> attrs.</span>
+                            <span>Searched <span className="font-semibold">{results.count.toLocaleString()}</span> docs; showing <span className="font-semibold">{results.documents.length}</span> documents × <span className="font-semibold">{results.attributes.length}</span> attrs.</span>
                             {results.sources?.length>0 && (<span className="flex items-center gap-2"><span className="text-gray-400">|</span>Sources:{results.sources.map(s=> (<span key={s} className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-800 border dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700">{SOURCE_TREE.find((n)=>n.key===s)?.label||s}</span>))}</span>)}
                             <span className="flex items-center gap-2"><span className="text-gray-400">|</span>Locations:{(results.locations||[]).map(l => (<span key={l} className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs border border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800">{l}</span>))}
                                 <span className="text-gray-400">|</span>
@@ -482,27 +489,28 @@ export default function GuideFindDashboard(){
                         </div>
                         <div className="overflow-x-auto">
                             <table className="min-w-full text-left text-sm">
-                                <thead><tr className="border-b bg-gray-50 dark:bg-gray-800 dark:border-gray-700"><th className="py-2 px-3 sticky left-0 bg-gray-50 dark:bg-gray-800 z-10">Case File</th>{results.attributes.map(attr=>(<th key={attr} className="py-2 px-3 whitespace-nowrap">{attr}</th>))}<th className="py-2 px-3">Details</th></tr></thead>
+                                <thead><tr className="border-b bg-gray-50 dark:bg-gray-800 dark:border-gray-700"><th className="py-2 px-3 sticky left-0 bg-gray-50 dark:bg-gray-800 z-10">Document</th>{results.attributes.map(attr=>(<th key={attr} className="py-2 px-3 whitespace-nowrap">{attr}</th>))}<th className="py-2 px-3">Details</th></tr></thead>
                                 <tbody>
-                                {results.cases.map(c=> (
-                                    <React.Fragment key={c.id}>
+                                {results.documents.map(doc=> (
+                                    <React.Fragment key={doc.id}>
                                         <tr className="border-b last:border-0 border-gray-200 dark:border-gray-800">
-                                            <td className="py-2 px-3 font-medium text-gray-900 dark:text-gray-100 sticky left-0 bg-white dark:bg-gray-900 z-10">{c.id}</td>
-                                            {results.attributes.map(attr=>{ const v=c.matches[attr]; return (<td key={attr} className="py-2 px-3"><span className={`px-2 py-0.5 rounded-full text-xs border ${v?"bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800":"bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700"}`}>{v?"Yes":"No"}</span></td>); })}
-                                            <td className="py-2 px-3"><button className="text-blue-700 dark:text-blue-400 hover:underline" onClick={()=>setExpanded(p=>({...p,[c.id]:!p[c.id]}))}>{expanded[c.id]?"Hide":"View"}</button></td>
+                                            <td className="py-2 px-3 font-medium text-gray-900 dark:text-gray-100 sticky left-0 bg-white dark:bg-gray-900 z-10">{doc.id}</td>
+                                            {results.attributes.map(attr=>{ const v=doc.matches[attr]; return (<td key={attr} className="py-2 px-3"><span className={`px-2 py-0.5 rounded-full text-xs border ${v?"bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800":"bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700"}`}>{v?"Yes":"No"}</span></td>); })}
+                                            <td className="py-2 px-3"><button className="text-blue-700 dark:text-blue-400 hover:underline" onClick={()=>setExpanded(p=>({...p,[doc.id]:!p[doc.id]}))}>{expanded[doc.id]?"Hide":"View"}</button></td>
                                         </tr>
-                                        {expanded[c.id] && (
+                                        {expanded[doc.id] && (
                                             <tr><td colSpan={results.attributes.length+2} className="bg-gray-50 dark:bg-gray-800"><div className="p-3 space-y-4">
                                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                                    <div><div className="text-xs uppercase text-gray-500 dark:text-gray-400">Child Name</div><div className="font-medium text-gray-900 dark:text-gray-100">{c.header.name}</div></div>
-                                                    <div><div className="text-xs uppercase text-gray-500 dark:text-gray-400">DOB</div><div>{c.header.dob}</div></div>
-                                                    <div><div className="text-xs uppercase text-gray-500 dark:text-gray-400">Case #</div><div>{c.header.caseNumber}</div></div>
-                                                    <div><div className="text-xs uppercase text-gray-500 dark:text-gray-400">Primary Caregiver</div><div>{c.header.caregiver}</div></div>
-                                                    <div><div className="text-xs uppercase text-gray-500 dark:text-gray-400">County</div><div>{c.header.county}</div></div>
-                                                    <div><div className="text-xs uppercase text-gray-500 dark:text-gray-400">Opened</div><div>{c.header.openedDate}</div></div>
+                                                    <div><div className="text-xs uppercase text-gray-500 dark:text-gray-400">Document Name</div><div className="font-medium text-gray-900 dark:text-gray-100">{doc.docName}</div></div>
+                                                    <div><div className="text-xs uppercase text-gray-500 dark:text-gray-400">Vendor/Customer</div><div className="font-medium text-gray-900 dark:text-gray-100">{doc.header.vendor}</div></div>
+                                                    <div><div className="text-xs uppercase text-gray-500 dark:text-gray-400">Account #</div><div>{doc.header.accountNumber}</div></div>
+                                                    <div><div className="text-xs uppercase text-gray-500 dark:text-gray-400">Amount</div><div>{doc.header.amount}</div></div>
+                                                    <div><div className="text-xs uppercase text-gray-500 dark:text-gray-400">Status</div><div>{doc.header.status}</div></div>
+                                                    <div><div className="text-xs uppercase text-gray-500 dark:text-gray-400">Date</div><div>{doc.header.date}</div></div>
+                                                    <div><div className="text-xs uppercase text-gray-500 dark:text-gray-400">Location</div><div>{doc.header.location}</div></div>
                                                 </div>
-                                                <div className="text-sm"><div className="text-xs uppercase text-gray-500 dark:text-gray-400 mb-1">Positive Flags</div><div className="flex flex-wrap gap-2">{results.attributes.filter(a=>c.matches[a]).map(a=>(<span key={a} className="px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-xs border border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800">{a}</span>))}{results.attributes.every(a=>!c.matches[a]) && (<span className="text-xs text-gray-500 dark:text-gray-400">None</span>)}</div></div>
-                                                <div><div className="text-sm font-medium">Narrative</div><p className="mt-1 text-gray-800 dark:text-gray-200 leading-relaxed">{c.narrativeText}</p></div>
+                                                <div className="text-sm"><div className="text-xs uppercase text-gray-500 dark:text-gray-400 mb-1">Positive Flags</div><div className="flex flex-wrap gap-2">{results.attributes.filter(a=>doc.matches[a]).map(a=>(<span key={a} className="px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-xs border border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800">{a}</span>))}{results.attributes.every(a=>!doc.matches[a]) && (<span className="text-xs text-gray-500 dark:text-gray-400">None</span>)}</div></div>
+                                                <div><div className="text-sm font-medium">Document Summary</div><p className="mt-1 text-gray-800 dark:text-gray-200 leading-relaxed">{doc.narrativeText}</p></div>
                                             </div></td></tr>
                                         )}
                                     </React.Fragment>

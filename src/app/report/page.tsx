@@ -101,7 +101,7 @@ const Input = ({ value, onChange, placeholder, className = "", disabled = false 
 );
 
 /********************* SAMPLE DATA *********************/
-const TYPES = ["Characteristic Attribute","Legal Action","Medical Event","Data Quality"] as const;
+const TYPES = ["Payment Discrepancy","Contract Violation","Billing Error","Data Quality"] as const;
 const STATUSES = ["New","In Review","Approved for Update","Complete"] as const;
 
 function makeId(i:number){ return `CASE-${1000+i}`; }
@@ -121,9 +121,9 @@ function buildExtraRows(){
     const dateLastReview = (i % 2 === 0) ? makeDate(2025,10,10) : "";
     const dateProcessed = (status === "Complete") ? makeDate(2025,10,11) : "";
     const details = (
-      exceptionType === "Characteristic Attribute" ? "Multiple attribute flags detected in recent notes; verify and route." :
-      exceptionType === "Legal Action" ? "Court-related change identified; confirm docket and update header if verified." :
-      exceptionType === "Medical Event" ? "Medical reference found in case narrative; confirm encounter date and provider." :
+      exceptionType === "Payment Discrepancy" ? "Multiple payment flags detected in recent transactions; verify and route for reconciliation." :
+      exceptionType === "Contract Violation" ? "Contract-related issue identified; confirm terms and update if verified." :
+      exceptionType === "Billing Error" ? "Billing discrepancy found in invoice records; confirm amounts and provider." :
       "Record quality or mapping issue detected; needs normalization/mapping review."
     );
     rows.push({ caseFile, personId, exceptionType, exceptionsCount, status, confidence, dateFind, dateLastReview, dateProcessed, details });
@@ -134,51 +134,51 @@ function buildExtraRows(){
 const BASE_ROWS: ExceptionRow[] = [
   {
     caseFile: "CASE-1000",
-    personId: "1234567890",
-    exceptionType: "Characteristic Attribute",
+    personId: "ACC-123456",
+    exceptionType: "Payment Discrepancy",
     exceptionsCount: 4,
     status: "New",
     confidence: true,
     dateFind: "2025-10-09",
     dateLastReview: "",
     dateProcessed: "",
-    details: "Attributes identified across Intake + Case Notes; requires initial triage.",
+    details: "Payment flags identified across invoices and billing records; requires initial triage.",
   },
   {
     caseFile: "CASE-1001",
-    personId: "1234567830",
-    exceptionType: "Characteristic Attribute",
+    personId: "ACC-234567",
+    exceptionType: "Payment Discrepancy",
     exceptionsCount: 4,
     status: "In Review",
     confidence: false,
     dateFind: "2025-10-09",
     dateLastReview: "2025-10-10",
     dateProcessed: "",
-    details: "Supervisor review in progress; awaiting confirmation from court record.",
+    details: "Finance review in progress; awaiting confirmation from contract documentation.",
   },
   {
     caseFile: "CASE-1002",
-    personId: "2211567890",
-    exceptionType: "Legal Action",
+    personId: "ACC-345678",
+    exceptionType: "Contract Violation",
     exceptionsCount: 1,
     status: "Approved for Update",
     confidence: true,
     dateFind: "2025-10-08",
     dateLastReview: "2025-10-10",
     dateProcessed: "",
-    details: "Petition filing verified; update to case header approved.",
+    details: "Contract breach verified; update to account status approved.",
   },
   {
     caseFile: "CASE-1003",
-    personId: "3652167890",
-    exceptionType: "Medical Event",
+    personId: "ACC-456789",
+    exceptionType: "Billing Error",
     exceptionsCount: 2,
     status: "Complete",
     confidence: false,
     dateFind: "2025-10-01",
     dateLastReview: "2025-10-01",
     dateProcessed: "2025-10-10",
-    details: "Medical visit and Rx reconciliation complete; no further action.",
+    details: "Billing correction and invoice reconciliation complete; no further action.",
   },
 ];
 
@@ -228,15 +228,15 @@ export default function ExceptionSummaryDashboard() {
 
           return {
             caseFile: r.case_id,
-            personId: String(1000000000 + i * 137).padStart(10, "0"),
-            exceptionType: "Characteristic Attribute",
+            personId: `ACC-${String(100000 + i * 137).slice(0, 6)}`,
+            exceptionType: "Payment Discrepancy",
             exceptionsCount: (r.positive_attributes || "").split(";").filter(Boolean).length || 1,
             status: isComplete ? "Complete" : (hasReview ? "In Review" : "New"),
             confidence: Math.random() > 0.5, // Random true/false
             dateFind,
             dateLastReview,
             dateProcessed,
-            details: r.evidence || "Flagged attributes found in case documents.",
+            details: r.evidence || "Flagged attributes found in billing documents.",
           };
         });
         if (mapped.length) setRows(mapped);
@@ -264,12 +264,12 @@ export default function ExceptionSummaryDashboard() {
 
   const exportCSV = () => {
     const headers = [
-      "Case File",
-      "Person ID",
+      "Document ID",
+      "Account #",
       "Exception Type",
       "Number of Exceptions",
       "Status",
-      "Confidence",
+      "Exception vs Source",
       "Date of FIND Assessment",
       "Date of Last Review",
       "Date Processed",
@@ -282,6 +282,7 @@ export default function ExceptionSummaryDashboard() {
         r.exceptionType,
         r.exceptionsCount,
         r.status,
+        fmtBool(r.confidence),
         fmtDate(r.dateFind),
         fmtDate(r.dateLastReview),
         fmtDate(r.dateProcessed),
@@ -303,13 +304,13 @@ export default function ExceptionSummaryDashboard() {
   };
 
   // Bulk action stubs
-  const routeToCaseManager = () => {
+  const routeToAccountManager = () => {
     const count = filtered.length;
-    alert(`Routed ${count} exception${count !== 1 ? 's' : ''} to Case Manager queue.`);
+    alert(`Routed ${count} exception${count !== 1 ? 's' : ''} to Account Manager queue.`);
   };
   const queueForReview = () => {
     const count = filtered.length;
-    alert(`Queued ${count} exception${count !== 1 ? 's' : ''} for QA review.`);
+    alert(`Queued ${count} exception${count !== 1 ? 's' : ''} for Finance review.`);
   };
   const processDataSync = () => {
     const count = filtered.length;
@@ -342,7 +343,7 @@ export default function ExceptionSummaryDashboard() {
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <div className="text-sm text-gray-700 dark:text-gray-300 mb-1">Search</div>
-            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by Case, Person, Type, Status" />
+            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by Document, Account, Type, Status" />
           </div>
           <div>
             <div className="text-sm text-gray-700 dark:text-gray-300 mb-1">Status</div>
@@ -369,8 +370,8 @@ export default function ExceptionSummaryDashboard() {
             <table className="min-w-full text-left text-sm text-gray-900 dark:text-gray-200">
               <thead>
                 <tr className="border-b bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
-                  <th className="py-2 px-3 whitespace-nowrap">Case File</th>
-                  <th className="py-2 px-3 whitespace-nowrap">Person ID</th>
+                  <th className="py-2 px-3 whitespace-nowrap">Document ID</th>
+                  <th className="py-2 px-3 whitespace-nowrap">Account #</th>
                   <th className="py-2 px-3 whitespace-nowrap">Exception Type</th>
                   <th className="py-2 px-3 whitespace-nowrap">Number of Exceptions</th>
                   <th className="py-2 px-3 whitespace-nowrap">Status</th>
@@ -413,11 +414,11 @@ export default function ExceptionSummaryDashboard() {
                             </div>
                             <div>
                               <div className="text-xs uppercase text-gray-500 dark:text-gray-400">Suggested Action</div>
-                              <div className="text-gray-800 dark:text-gray-200">Route to QA for confirmation and update if verified.</div>
+                              <div className="text-gray-800 dark:text-gray-200">Route to Finance for confirmation and update if verified.</div>
                             </div>
                             <div>
                               <div className="text-xs uppercase text-gray-500 dark:text-gray-400">Lineage / Source</div>
-                              <div className="text-gray-800 dark:text-gray-200">Derived from FIND scan across Intake, Case Notes, and Court Documents.</div>
+                              <div className="text-gray-800 dark:text-gray-200">Derived from FIND scan across Invoices, Contracts, and Billing Records.</div>
                             </div>
                           </div>
                         </td>
@@ -434,7 +435,7 @@ export default function ExceptionSummaryDashboard() {
       {/* Footer actions */}
       <div className="mt-8 flex flex-wrap justify-center gap-3">
         <Button onClick={exportCSV}>Export to .CSV</Button>
-        <Button onClick={routeToCaseManager}>Route to Case Manager</Button>
+        <Button onClick={routeToAccountManager}>Route to Account Manager</Button>
         <Button onClick={queueForReview}>Queue for Review</Button>
         <Button onClick={processDataSync}>Process Data Sync</Button>
         <Button onClick={() => window.location.href = '/'} className="bg-gray-600 hover:bg-gray-700 dark:bg-gray-700 dark:hover:bg-gray-800">Back to FIND</Button>
