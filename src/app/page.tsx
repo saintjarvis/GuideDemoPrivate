@@ -328,7 +328,7 @@ export default function GuideFindDashboard(){
         const headers=["case_id","name","dob","county","caregiver","opened","positive_attributes","evidence"];
         const csvEscape=(v: string)=>{ if(v==null) return ""; const s=String(v); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
         const lines=[headers.join(",")];
-        rows.forEach(r=>lines.push(headers.map(h=>csvEscape((r as any)[h]||"")).join(",")));
+        (rows as Array<Record<string, string>>).forEach(r=>lines.push(headers.map(h=>csvEscape(r[h]||"")).join(",")));
         const csv=lines.join("\n");
         const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
         const url=URL.createObjectURL(blob);
