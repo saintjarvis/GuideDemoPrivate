@@ -185,6 +185,21 @@ const LOCATION_CHOICES = [
     "Billing & Charging System",
     "Operations Support System (OSS)"
 ];
+const US_REGION_CHOICES = [
+    "Northeast",
+    "Southest",
+    "Midwest",
+    "Southwest",
+    "Mountain",
+    "Pacific"
+];
+const CA_REGION_CHOICES = [
+    "Atlantic Canada (NL, PE, NS, NB)",
+    "Central Canada (QC, ON)",
+    "Prairie Provinces (MB, SK, AB)",
+    "West Coast (BC)",
+    "Northern Territories (YT, NT, NU)"
+];
 
 /********************* COMPONENT ************************/
 export default function GuideFindDashboard(){
@@ -308,6 +323,24 @@ export default function GuideFindDashboard(){
         window.location.href = "/report";
     };
 
+    const exportToCSV=()=>{
+        const rows=buildExceptionSummaryRows(results)||[];
+        const headers=["case_id","name","dob","county","caregiver","opened","positive_attributes","evidence"];
+        const csvEscape=(v: string)=>{ if(v==null) return ""; const s=String(v); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+        const lines=[headers.join(",")];
+        rows.forEach(r=>lines.push(headers.map(h=>csvEscape((r as any)[h]||"")).join(",")));
+        const csv=lines.join("\n");
+        const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement("a");
+        a.href=url;
+        a.download=`Exception_Summary_${new Date().toISOString().slice(0,10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    };
+
     return (
         <div className="p-6 bg-gray-50 dark:bg-gray-950 min-h-screen">
             {/* Header */}
@@ -396,12 +429,17 @@ export default function GuideFindDashboard(){
                                 {/*    <input type="text" value={filterCaseOwner} onChange={(e)=>setFilterCaseOwner(e.target.value)} className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-1.5 text-sm" placeholder="Enter case owner name" />*/}
                                 {/*</div>*/}
 
-                                {/* Location */}
+                                {/* Region */}
                                 <div>
                                     <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Location/Region</div>
                                     <select value={filterRegion} onChange={(e)=>setFilterRegion(e.target.value)} className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-1.5 text-sm">
                                         <option value="">All Regions</option>
-                                        {LOCATION_CHOICES.map(county=>(<option key={county} value={county}>{county}</option>))}
+                                        <optgroup label="United States">
+                                            {US_REGION_CHOICES.map(region=>(<option key={region} value={region}>{region}</option>))}
+                                        </optgroup>
+                                        <optgroup label="Canada">
+                                            {CA_REGION_CHOICES.map(region=>(<option key={region} value={region}>{region}</option>))}
+                                        </optgroup>
                                     </select>
                                 </div>
 
@@ -524,7 +562,10 @@ export default function GuideFindDashboard(){
 
             {/* Export footer */}
             <div className="mt-10 flex flex-col items-center gap-2">
-                <Button onClick={exportExceptionSummary} disabled={!results || buildExceptionSummaryRows(results).length===0} className="px-6 py-2">View Exception Report Summary</Button>
+                <div className="flex gap-3">
+                    <Button onClick={exportExceptionSummary} disabled={!results || buildExceptionSummaryRows(results).length===0} className="px-6 py-2">View Exception Report Summary</Button>
+                    <Button onClick={exportToCSV} disabled={!results || buildExceptionSummaryRows(results).length===0} className="px-6 py-2">Export to CSV</Button>
+                </div>
                 {!results && <div className="text-xs text-gray-500 dark:text-gray-400">Run FIND to enable export.</div>}
                 {results && buildExceptionSummaryRows(results).length===0 && (<div className="text-xs text-gray-500 dark:text-gray-400">No positive flags to export yet.</div>)}
             </div>
